@@ -1,0 +1,14 @@
+{
+  "appId": "bg.avtotefter.app",
+  "appName": "АвтоТефтер",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_car",
+      "iconColor": "#0A3A9E"
+    }
+  }
+}

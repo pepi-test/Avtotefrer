@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">АвтоТефтер</string>
+    <string name="title_activity_main">АвтоТефтер</string>
+    <string name="package_name">bg.avtotefter.app</string>
+    <string name="custom_url_scheme">bg.avtotefter.app</string>
+</resources>
