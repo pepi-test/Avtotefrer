@@ -778,7 +778,7 @@ async function saveVeh(){const v=form.v;['plate','make','model','fuel','name','v
   Object.keys(v).forEach(k=>v[k]===''&&delete v[k]);
   const isNew=!S.vehicles.some(x=>x.id===v.id);closeSheet();if(v.share&&v.share.vin!==normVin(v.vin)){const ov=v.share.vin;if(vinOk(normVin(v.vin)))v.share.vin=normVin(v.vin);else v.share=null;if(HDB)HDB.doc('history/'+ov).delete().catch(()=>{})}await putV(v);syncShare(v.id);if(isNew)go(v.id);toast('Записано.')}
 function newChooser(){if(!S.vehicles.length){vehForm();return}recForm(null,S.vid||S.vehicles[0].id)}
-function settings(){openSheet(`<h3>Известия</h3><p class="hint" style="margin:0 0 12px">Телефонът ви напомня в 9:00 — 30, 14, 7 и 1 ден преди всеки срок и в деня на изтичане. Работи и когато приложението е затворено.</p>
+function settings(){openSheet(`<h3>Известия</h3><p class="hint" style="margin:0 0 12px">Телефонът ви напомня в 9:00 — 14 и 7 дни преди всеки срок и всяка вноска. Работи и когато приложението е затворено.</p>
   <p class="hint" id="nst" style="margin:0 0 10px"></p>
   <div class="two"><button class="btn" data-act="notifOn">Разреши известията</button><button class="btn" data-act="notifTest">Пробно известие</button></div>
   <h3 style="margin-top:22px">Резервно копие</h3><p class="hint" style="margin:0 0 12px">Всичко е само на този телефон. Ако телефонът се изгуби или приложението се изтрие, данните се губят — пазете копие (в Google Drive, имейл и т.н.).</p>
@@ -895,7 +895,7 @@ let nT=null;
 function scheduleNotifs(){if(!N)return;clearTimeout(nT);nT=setTimeout(async()=>{try{const LN=N.LocalNotifications;const p=await LN.checkPermissions();if(p.display!=='granted')return;
   const pend=await LN.getPending();if(pend.notifications&&pend.notifications.length)await LN.cancel({notifications:pend.notifications.map(n=>({id:n.id}))});
   const now=new Date(),list=[];let id=1;
-  for(const it of remItems()){if(!it.due)continue;for(const off of [30,14,7,1,0]){const at=new Date(it.due+'T09:00:00');at.setDate(at.getDate()-off);if(at<=now)continue;
+  for(const it of remItems()){if(!it.due)continue;for(const off of [14,7]){const at=new Date(it.due+'T09:00:00');at.setDate(at.getDate()-off);if(at<=now)continue;
     list.push({id:id++,title:it.w+' · '+it.v,body:off===0?'Изтича днес ('+fmtD(it.due)+')':'Изтича след '+off+' '+dn(off)+' — на '+fmtD(it.due),schedule:{at,allowWhileIdle:true},smallIcon:'ic_stat_car',iconColor:'#0A3A9E'})}}
   list.sort((a,b)=>a.schedule.at-b.schedule.at);if(list.length)await LN.schedule({notifications:list.slice(0,60)})}catch(e){}},800)}
 async function notifPermission(ask){if(!N)return 'none';try{const LN=N.LocalNotifications;let p=await LN.checkPermissions();if(p.display!=='granted'&&ask)p=await LN.requestPermissions();if(p.display==='granted')scheduleNotifs();return p.display}catch(e){return 'error'}}
