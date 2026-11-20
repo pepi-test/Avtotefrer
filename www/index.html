@@ -365,7 +365,7 @@ Bulgarian hints: маслен филтър = oil filter; въздушен фил
 const AIERR={ocr_unavailable:'Разпознаването на текст работи само в приложението на телефона.',ocr_empty:'Не се разчита текст. Снимайте по-отблизо, на светло и без отблясъци.',not_granted:'Достъпът до Claude не е разрешен.',sampling_disabled:'Claude не е достъпен за този профил.',images_unavailable:'Изпращането на снимки към Claude не е достъпно тук.',rate_limited:'Твърде много заявки — опитайте след малко.',image_rejected:'Снимката не може да се прочете. Опитайте с друга.',invalid_json:'Документът не се разчете. Опитайте пак или с по-ясна снимка.',cancelled:''};
 const sstr=x=>x==null?'':String(x).trim(),snum=x=>{const n=parseFloat(String(x??'').replace(',','.'));return isFinite(n)&&n>0?n:null};
 const KIND={fuel:['fuel'],oil:['oil'],service:['service'],tires:['tires'],vignette:['ins','vig'],route_card:['ins','mk'],gtp:['ins','gtp'],go:['ins','go'],kasko:['ins','kasko'],tax:['ins','tax'],other:['other']};
-async function askAI(imgs,hint){const t=[];for(const b of imgs.slice(0,3))t.push(await ocrText(b));const all=t.join('\n');LASTOCR=all;if(!all.trim())throw {code:'ocr_empty'};return parseDoc(all,hint)}
+async function askAI(imgs,hint,key){const t=[];for(const b of imgs.slice(0,3))t.push(await ocrText(b));const all=t.join('\n');LASTOCR=all;if(!all.trim())throw {code:'ocr_empty'};return parseDoc(all,hint,key)}
 let LASTOCR='';
 const ocrDetails=()=>LASTOCR?`<details style="margin:-6px 0 14px"><summary style="cursor:pointer;color:var(--eu2);padding:6px 0;font-size:14px">Какво разчете телефонът</summary><pre style="white-space:pre-wrap;font-size:12px;background:var(--chip);padding:10px;border-radius:10px;max-height:220px;overflow:auto">${esc(LASTOCR)}</pre><button class="btn" style="min-height:40px" data-act="copyocr">Копирай текста</button></details>`:'';
 async function ocrText(b){if(window.__OCR)return window.__OCR(b);return ocr(b)}
@@ -417,7 +417,7 @@ function partCode(lines,re){for(const l of lines){const m=l.match(re);if(m){cons
 function parseOdo(text){const T=normT(text).replace(/(\d)[ ](?=\d{3}(?!\d))/g,'$1');let best=null;
   for(const l of T.split('\n')){for(const m of l.matchAll(/(?<![\d.,:])(\d{3,7})(?![\d.,:°])/g)){const v=+m[1];if(v<100||v>1999999)continue;const after=l.slice(m.index+m[0].length,m.index+m[0].length+5),sc=(/ODO|TOTAL/.test(l)?2e7:0)+(/^\s*(KM|MI)/.test(after)?1e7:0)+(/TRIP/.test(l)?-3e7:0)+v;if(!best||sc>best.sc)best={v,sc,mi:/^\s*MI/.test(after)}}}
   return best?{km:best.v,unit:best.mi?'mi':'km'}:{km:null}}
-function parseDoc(text,hint){const T=normT(text),L=T.split('\n').map(x=>x.trim()).filter(Boolean),o={};
+function parseDoc(text,hint,hint2){const T=normT(text),L=T.split('\n').map(x=>x.trim()).filter(Boolean),o={};
   const ds=datesIn(T),td=today(),past=ds.filter(d=>d<=td);
   const vin=findVin(T),pl=findPlate(T);if(pl)o.plate=pl;
   const isFuel=/DIESEL|DIZEL|AN3EN|BENZIN|A[ -]?95|A[ -]?98|A[ -]?100|\b95H\b|LPG|AUTOGAS|AYTOFA3|V-?POWER|MAXX|EKTO|\bEVO\b|SUPREME|FUEL|BENZIN|GORIVO|\bLTR?\b|\bL\s*X\s*\d/.test(T),
@@ -426,11 +426,16 @@ function parseDoc(text,hint){const T=normT(text),L=T.split('\n').map(x=>x.trim()
         airF=partCode(L,/\b(C\s?\d{2}\s?\d{3}(?:\/\d)?|C\s?\d{4,5}(?:\/\d)?|LX\s?\d{3,4}(?:\/\d{1,2})?|AP\s?\d{3}(?:\/\d)?|AR\s?\d{3}(?:\/\d)?)\b/),
         cabF=partCode(L,/\b(CUK\s?\d{4,5}|CU\s?\d{4,5}|FP\s?\d{4,5}|LAK\s?\d{3,4}|LA\s?\d{3,4}|K\s?1\d{3}[A-Z]?)\b/),
         fuelF=partCode(L,/\b(WK\s?\d{3,4}(?:\/\d{1,2})?\s?[A-Z]?|PU\s?\d{3,4}\s?[A-Z]?|KL\s?\d{2,4}|KX\s?\d{2,4}\s?[A-Z]?|PP\s?\d{3}(?:\/\d)?|PE\s?\d{3}(?:\/\d)?)\b/);
-  const isVig=/BGTOLL|VIGNET|VINETK|BNHETK|BИНЕТ|E-?VIGN/.test(T);
+  const isVig=/BGTOLL|VIGNET|VINETK|BNHETK|BИНЕТ|E-?VIGN/.test(T),
+        isKasko=/KACKO|CASCO|KASKO/.test(T),
+        isGO=!isKasko&&/OBOPHOCT|OTFOBOP|OTTOBOP|OTГOBOP|ГPAЖ|TPAX|GRAZHD|MTPL|ZELENA ?KARTA|GREEN ?CARD|3EЛEHA|3ENEHA|ГAPAHЦ|ГО\b/.test(T),
+        isGTP=/TEXHNY|TEXHИЧ|TEXH\w*\s+\w*PEГ|NPEГ|NPEF|ПPEГ|PREGLED|ГTП|FTN|GTP|IAAA|ИAAA|ДKTП|DKTP|ДИAГHOCT/.test(T),
+        isTax=/AHЪK|AHЬK|AHBK|DANAK|ДAHЪK|MДT|O6WNH|OБЩИH|OBSHTIN|MECTHN|MECTHИ/.test(T),
+        insDoc=isVig?'vignette':isKasko?'kasko':isGO?'go':isGTP?'gtp':isTax?'tax':null;
   let kind=hint==='reg'?'registration':null;
   if(!kind&&['fuel','oil','service','tires','other','ins'].includes(hint))kind=hint==='ins'?(isVig?'vignette':'ins'):hint;
   const isReg=vin&&(pl||/\bD\s?[.,]?\s?[13]\b|\bE\s?[.,]\s|CBNДETEЛ|CBИДETEЛ|SVIDETEL|REGISTR|PE[ГG]NCTP/.test(T)||!isFuel);
-  if(!kind){if(isReg&&!visc)kind='registration';else if(isVig)kind='vignette';else if(visc||oilF)kind='oil';else if(isFuel)kind='fuel';else if(ds.length>=2&&dayDiff(ds[0],ds[ds.length-1])>=20&&dayDiff(ds[0],ds[ds.length-1])<=400)kind='ins';else kind='other'}
+  if(!kind){if(isReg&&!visc)kind='registration';else if(isVig)kind='vignette';else if(insDoc)kind='ins';else if(visc||oilF)kind='oil';else if(isFuel)kind='fuel';else if(ds.length>=2&&dayDiff(ds[0],ds[ds.length-1])>=20&&dayDiff(ds[0],ds[ds.length-1])<=400)kind='ins';else kind='other'}
   o.kind=kind==='ins'?null:kind;
   if(past.length&&kind!=='registration')o.date=past[past.length-1];
   if(kind==='registration'){if(vin)o.vin=vin;const mk=findMake(T);if(mk){o.make=prettyMake(mk);const md=findModel(T,L,mk);if(md)o.model=md.split(' ').map(w=>/\d/.test(w)||w.length<=3?w:w.split('-').map(x=>x.charAt(0)+x.slice(1).toLowerCase()).join('-')).join(' ')}
@@ -448,11 +453,16 @@ function parseDoc(text,hint){const T=normT(text),L=T.split('\n').map(x=>x.trim()
     const q=T.match(/(\d(?:[.,]\d)?)\s*(?:L|Л|LTR|ЛТ)\b/);if(q){const v=parseFloat(q[1].replace(',','.'));if(v>=2&&v<=12)o.qty=v}
     if(oilF)o.oilF=oilF;if(airF)o.airF=airF;if(cabF)o.cabF=cabF;if(fuelF)o.fuelF=fuelF;
     const kmm=T.match(/(\d{2,3}[ .]?\d{3})\s*KM\b/);if(kmm)o.km=+kmm[1].replace(/\D/g,'');return o}
-  if(kind==='vignette'||kind==='ins'||hint==='ins'){o.doc=isVig?'vignette':null;const all=ds.slice();
-    if(all.length>=2){const a=all[0],b=all[all.length-1],dd=dayDiff(a,b);if(dd>=0&&dd<=400){o.validFrom=a;o.validTo=b;o.date=a;
-      if(isVig)o.vigType=dd<=1?'day1':dd<=3?'weekend':dd<=8?'week':dd<=32?'month':dd<=93?'quarter':'year'}}
+  if(kind==='vignette'||kind==='ins'||hint==='ins'){o.doc=insDoc;const doc=insDoc||hint2;
+    const span=doc==='gtp'?800:400,last=ds.length?ds[ds.length-1]:null,all=last?ds.filter(d=>dayDiff(d,last)<=span):[];
+    if(all.length>=2){const a=all[0],b=all[all.length-1],dd=dayDiff(a,b);o.validFrom=a;o.validTo=b;o.date=a;
+      if(isVig)o.vigType=dd<=1?'day1':dd<=3?'weekend':dd<=8?'week':dd<=32?'month':dd<=93?'quarter':'year';
+      if(doc==='go'||doc==='kasko'||(!doc&&dd>=330)){let n=0;const kw=T.match(/(?:BHOCK|BNOSK|BHOCKN|BHOCKИ|ВНОСК|INSTAL)\D{0,25}([1-4])\b|\b([1-4])\s*(?:BHOCK|BNOSK|ВНОСК)/);if(kw)n=+(kw[1]||kw[2]);
+        if(!n){const mid=all.filter(d=>d>a&&d<b).map(d=>Math.round(dayDiff(a,d)/30.4));const q=[3,6,9].filter(m=>mid.includes(m));n=q.length>=2?4:q.includes(6)?2:q.includes(3)?4:0}
+        if([2,4].includes(n)){o.instalments=n;o.instPaid=1}}}
     else if(all.length===1){o.validFrom=all[0];o.date=all[0]}
-    const c=money(near(L,/EUR|€|CYMA|SUMA|ПРЕМ|PREM|ОБЩ/).join(' '));if(c.length)o.cost=Math.max(...c);return o}
+    const st=T.match(/\b(BULSTRAD|DZI|ARMEEC|LEV ?INS|ALLIANZ|GENERALI|EUROINS|BUL ?INS|OZK|UNIQA|GROUPAMA|DALLBOGG|INSTINCT|ASSET ?INSURANCE|BULGARIA ?INSURANCE)\b/);if(st)o.shop=st[1].length<=3?st[1]:st[1].charAt(0)+st[1].slice(1).toLowerCase();
+    return o}
   const kmm=T.match(/(\d{2,3}[ .]?\d{3})\s*KM\b/);if(kmm)o.km=+kmm[1].replace(/\D/g,'');
   return o}
 function applyAI(o,r){const str=sstr,numv=snum,t=r.type;let n=0,plateWarn='';const put=(k,v)=>{if(v!=null&&v!==''){r[k]=v;n++}};
@@ -478,7 +488,7 @@ async function aiExtract(b){keepRec();const st=$('#aist');
   if(!imgs.length){for(const p of form.r.photos.filter(p=>!p.pdf).slice(-4)){const s=phSrc(p);if(!s)continue;try{imgs.push(await (await fetch(s)).blob())}catch(e){}}}
   if(!imgs.length){st.textContent='Първо снимайте документа или го добавете от галерията.';return}
   b.disabled=true;st.textContent='Чета документа…';
-  try{const o=await askAI(imgs,form.r.type);const {n,plateWarn}=applyAI(o,form.r);
+  try{const o=await askAI(imgs,form.r.type,form.r.key);const {n,plateWarn}=applyAI(o,form.r);
     form.aiMsg=n?plateWarn+'Попълнени са '+n+' полета. Проверете ги преди да запазите.':'Не открих данни в документа. Опитайте с по-ясна снимка.';drawRec();
   }catch(e){st.textContent=AIERR[e&&e.code]??'Нещо се обърка. Опитайте пак.';b.disabled=false}}
 
@@ -689,6 +699,13 @@ async function rcptFlow(file){const r=form.r;phBusy('Чета касовата �
     form.aiMsg=n?`Бележката е прочетена${r.liters?': '+nf(r.liters,2)+' л':''}${r.cost?' за '+eur(r.cost):''}. ${r.km?'Проверете и запазете.':'Сега снимайте километража (бутон 2).'}`:'Не успях да прочета бележката. Опитайте пак или попълнете ръчно.'}
   catch(e){form.aiMsg=AIERR[e&&e.code]||'Бележката не се прочете. Опитайте пак.'}
   if(form&&form.kind==='rec')drawRec()}
+async function docFlow(file){const r=form.r;phBusy('Чета документа…');
+  try{r.photos.push(await storePhoto(file));(form.blobs=form.blobs||[]).push(file)}catch(e){}
+  try{const o=await askAI([file],'ins',r.key);const {n,plateWarn}=applyAI(o,r);
+    const nm=(DL.find(d=>d[0]===r.key)||['','Документ'])[1];
+    form.aiMsg=n?plateWarn+nm+(r.valid?' — валидно до '+fmtD(r.valid):'')+(+r.inst>1?', '+r.inst+' вноски':'')+'. Проверете и запазете.':'Не успях да разчета документа. Опитайте по-отблизо, на светло, или попълнете ръчно.'}
+  catch(e){form.aiMsg=AIERR[e&&e.code]||'Документът не се разчете. Опитайте пак.'}
+  if(form&&form.kind==='rec')drawRec()}
 async function odoFlow(file){const r=form.r;phBusy('Чета километража…');
   try{const p=await storePhoto(file);p.odo=true;r.photos.push(p)}catch(e){}
   try{const tx=await ocrText(file);LASTOCR=tx;const o=parseOdo(tx);let k=snum(o&&o.km);
@@ -731,7 +748,7 @@ function drawRec(){const r=form.r,t=r.type,v=S.vehicles.find(x=>x.id===r.vid);
    <div class="two">${fld('liters','Литри',r.liters,'number','inputmode="decimal" step="0.01"')}${fld('price','Цена за литър (€)',r.liters&&r.cost?(r.cost/r.liters).toFixed(3):'','number','inputmode="decimal" step="0.001"')}</div>
    ${fld('cost','Обща сума (€)',r.cost,'number','inputmode="decimal" step="0.01"')}<p class="hint">Попълнете две от трите — третото се смята само.</p>
    <label class="chk"><input type="checkbox" name="full" ${r.full!==false?'checked':''}> Пълен резервоар</label><p class="hint">Разходът се смята между две зареждания до пълно. Въвеждайте километража при всяко зареждане.</p>${fld('shop','Бензиностанция',r.shop,'text','placeholder="Shell, Lukoil…"')}`;
-  else if(t==='ins')body=`<label class="f"><span>Какво</span><select name="key">${(v?dlFor(v):DL).map(([k,l])=>`<option value="${k}" ${r.key===k?'selected':''}>${l}</option>`).join('')}</select></label>
+  else if(t==='ins')body=`${SAMPLE?`<label class="btn pri full" style="min-height:64px;margin-bottom:14px" data-snapm="doc" role="button">${I(CAM)} ${{go:'Снимай полицата',kasko:'Снимай полицата',gtp:'Снимай документа от ГТП',vig:'Снимай винетката',tax:'Снимай бележката за данък'}[r.key]||'Снимай документа'}<input type="file" accept="image/*" class="snapin"></label>`:''}<label class="f"><span>Какво</span><select name="key">${(v?dlFor(v):DL).map(([k,l])=>`<option value="${k}" ${r.key===k?'selected':''}>${l}</option>`).join('')}</select></label>
    <div class="two">${fld('date',r.key==='mk'?'Начало':'Платено на',r.date,'date')}${fld('valid','Валидно до',r.valid,'date','placeholder="по подразбиране след 1 година"')}</div><div class="past" data-past="valid"></div>${r.key==='mk'?fld('tm','Начален час',r.tm,'time'):''}${r.key==='go'||r.key==='kasko'?`<div class="two"><label class="f"><span>Плащане</span><select name="inst">${[[1,'Еднократно'],[2,'2 вноски'],[4,'4 вноски']].map(([n,l])=>`<option value="${n}" ${(+r.inst||1)===n?'selected':''}>${l}</option>`).join('')}</select></label>${+r.inst>1?`<label class="f"><span>Платени вноски</span><select name="paid">${Array.from({length:+r.inst},(_,i)=>i+1).map(n=>`<option ${(+r.paid||1)===n?'selected':''}>${n}</option>`).join('')}</select></label>`:''}</div>${+r.inst>1&&(+r.paid||1)<+r.inst?`<p class="hint">Следваща вноска до ${fmtD(shM(r.date,(+r.paid||1)*12/(+r.inst)))}. Ако не я платите навреме, полицата може да бъде прекратена.</p>`:''}`:''}${PER[r.key]&&r.key!=='mk'?`<label class="f"><span>Вид винетка</span><select name="vtype">${PER[r.key].map(([k,l])=>`<option value="${k}" ${r.vtype===k?'selected':''}>${l}</option>`).join('')}</select></label><p class="hint">„Валидно до“ се изчислява от началната дата. Проверка: <a href="https://check.bgtoll.bg" target="_blank" rel="noopener">check.bgtoll.bg</a></p>`:(r.key==='tax'?'<p class="hint">Данъкът важи 1 година от плащането — „Валидно до“ се попълва само.</p>':r.key==='mk'?'<p class="hint">За превозни средства над 3,5 т. Важи 24 часа от началото. Проверка: <a href="https://www.bgtoll.bg" target="_blank" rel="noopener">bgtoll.bg</a></p>':'<p class="hint">„Валидно до“ обновява срока на превозното средство.</p>')}
    <div class="two">${fld('shop',r.key==='mk'?'Маршрут (напр. Русе – Кулата)':r.key==='vig'?'Къде е купена':r.key==='tax'?'Община':'Застраховател / пункт',r.shop)}${fld('km','Километраж',r.km,'number','inputmode="numeric"')}</div>`;
   else body=`<div class="two">${fld('date','Дата',r.date,'date')}${fld('km','Километраж',r.km,'number','inputmode="numeric" placeholder="'+(v?curKm(v):'')+'"')}</div>${SAMPLE?`<label class="btn full" style="margin:-4px 0 14px" data-snapm="odo" role="button">${I('<circle cx="12" cy="14" r="8"/><path d="M12 14l4-4M7 18h10"/>')} ${r.km?'Снимай километража отново':'Снимай километража'}<input type="file" accept="image/*" class="snapin"></label>`:''}
@@ -860,12 +877,12 @@ document.addEventListener('change',e=>{const t=e.target;if(form&&form.kind==='ve
 document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#panel')&&e.target.type==='date')pastCheck();if(!form||form.r?.type!=='fuel')return;const n=e.target.name;if(!['liters','price','cost'].includes(n))return;
   const L=parseFloat(val('liters').replace(',','.')),P=parseFloat(val('price').replace(',','.')),C=$('#panel [name=cost]');
   if((n==='liters'||n==='price')&&L>0&&P>0)C.value=(L*P).toFixed(2)});
-async function onFiles(e){const files=[...e.target.files];e.target.value='';if((snapMode==='odo'||snapMode==='rcpt')&&form&&form.kind==='rec'){const m=snapMode;snapMode=null;const f=files.find(f=>f.type.startsWith('image/'));if(f)(m==='odo'?odoFlow(f):rcptFlow(f));return}if(snapMode){const im=files.filter(f=>f.type.startsWith('image/'));const f=im[0];if(f)snapFlow(f,im.slice(1,3));else{snapMode=null;toast('Изберете снимка.')}return}if(!form)return;
+async function onFiles(e){const files=[...e.target.files];e.target.value='';if((snapMode==='odo'||snapMode==='rcpt'||snapMode==='doc')&&form&&form.kind==='rec'){const m=snapMode;snapMode=null;const f=files.find(f=>f.type.startsWith('image/'));if(f)(m==='odo'?odoFlow(f):m==='doc'?docFlow(f):rcptFlow(f));return}if(snapMode){const im=files.filter(f=>f.type.startsWith('image/'));const f=im[0];if(f)snapFlow(f,im.slice(1,3));else{snapMode=null;toast('Изберете снимка.')}return}if(!form)return;
   for(const f of files){form.up=true;$('#phs')&&($('#phs').innerHTML=phEdit());
     try{form.r.photos.push(await storePhoto(f));if(f.type.startsWith('image/'))(form.blobs=form.blobs||[]).push(f)}catch(err){toast(err.message==='pdf'?'PDF може да се добави само от собственика на приложението.':err.message==='full'?'Няма място на устройството за снимката.':'Снимката не се качи. Опитайте пак.')}
     form.up=false;if(form&&$('#phs'))$('#phs').innerHTML=phEdit()}}
 document.addEventListener('change',e=>{const t=e.target;if(!t.classList||!t.classList.contains('snapin'))return;const m=t.closest('[data-snapm]').dataset.snapm;
-  if(form&&form.kind==='rec')keepRec();snapMode={rcpt:'rcpt',odo:'odo',snapCam:'any',snapFile:'any',snapReg:'reg',cam:null,file:null}[m];onFiles(e)});
+  if(form&&form.kind==='rec')keepRec();snapMode={doc:'doc',rcpt:'rcpt',odo:'odo',snapCam:'any',snapFile:'any',snapReg:'reg',cam:null,file:null}[m];onFiles(e)});
 document.addEventListener('change',e=>{const t=e.target;if(t.classList&&t.classList.contains('impin')&&t.files&&t.files[0]){const f=t.files[0];t.value='';readImport(f)}});
 $('#fCam').addEventListener('change',onFiles);$('#fFile').addEventListener('change',onFiles);
 $('#fab').addEventListener('click',()=>S.ready&&snapMenu());
@@ -900,7 +917,7 @@ function scheduleNotifs(){if(!N)return;clearTimeout(nT);nT=setTimeout(async()=>{
   list.sort((a,b)=>a.schedule.at-b.schedule.at);if(list.length)await LN.schedule({notifications:list.slice(0,60)})}catch(e){}},800)}
 async function notifPermission(ask){if(!N)return 'none';try{const LN=N.LocalNotifications;let p=await LN.checkPermissions();if(p.display!=='granted'&&ask)p=await LN.requestPermissions();if(p.display==='granted')scheduleNotifs();return p.display}catch(e){return 'error'}}
 /* camera / gallery through the phone */
-const SNAPMAP={rcpt:'rcpt',odo:'odo',snapCam:'any',snapFile:'any',snapReg:'reg',cam:null,file:null};
+const SNAPMAP={doc:'doc',rcpt:'rcpt',odo:'odo',snapCam:'any',snapFile:'any',snapReg:'reg',cam:null,file:null};
 document.addEventListener('click',async e=>{const l=e.target.closest&&e.target.closest('label[data-snapm]');if(!l||!N)return;e.preventDefault();e.stopPropagation();const m=l.dataset.snapm,gallery=(m==='snapFile'||m==='file');
   try{const files=[];
     if(gallery){const r=await N.Camera.pickImages({quality:85,limit:m==='snapFile'?3:5});for(const ph of r.photos||[]){const f=await N.Filesystem.readFile({path:ph.path});files.push(b64ToBlob(f.data,'image/'+(ph.format==='png'?'png':'jpeg')))}}
