@@ -344,7 +344,7 @@ function renderVeh(v){
   <h2>Гориво ${y}</h2><div class="stats"><div class="stat"><b>${eur(fuel)}</b><span>похарчени</span></div><div class="stat"><b>${nf(yr.filter(r=>r.type==='fuel').reduce((s,r)=>s+(+r.liters||0),0))} л</b><span>заредени</span></div><div class="stat"><b>${avg?nf(avg,1)+' л':'—'}</b><span>среден разход на 100 км${(fl=>fl&&fl.last&&fl.meas.length>1?' · последно '+nf(fl.last.c,1)+' л':'')(fuelStats(v.id))}</span></div></div>
   <h2>История</h2><div class="chips">${[['all','Всички'],...Object.entries(RT).map(([k,a])=>[k,a[0]])].map(([k,l])=>`<button class="chip" aria-pressed="${S.filter===k}" data-filter="${k}">${l}</button>`).join('')}</div>
   <div>${shown.length?shown.map(recHTML).join(''):`<p class="hint" style="margin:14px 0">Няма записи${S.filter!=='all'?' от този вид':''}. Добавете с бутоните горе или с +.</p>`}</div>
-  <h2>При продажба</h2><div class="card"><p style="margin:0 0 12px">Изпратете историята на новия собственик като файл — по Viber, имейл и т.н. Той я отваря в своето приложение АвтоТефтер. Никой друг не я вижда.</p><details style="margin-bottom:12px"><summary style="cursor:pointer;color:var(--eu2);padding:8px 0">Какво ще види купувачът накратко</summary>${summaryHTML(recsOf(v.id))}</details><button class="btn pri full" data-act="share">${I('<path d="M4 12v7h16v-7M12 3v12M7 8l5-5 5 5"/>')} Изпрати историята на купувача</button></div>
+  <h2>При продажба</h2><div class="card"><p style="margin:0 0 12px">Изпратете историята на новия собственик като файл — по Viber, имейл и т.н. Той я отваря в своето приложение АвтоТефтер. Никой друг не я вижда.</p><details style="margin-bottom:12px"><summary style="cursor:pointer;color:var(--eu2);padding:8px 0">Какво ще види купувачът накратко</summary>${summaryHTML(recsOf(v.id))}</details><button class="btn pri full" data-act="share">${I('<path d="M4 12v7h16v-7M12 3v12M7 8l5-5 5 5"/>')} Изпрати историята на купувача</button><button class="btn del full" style="margin-top:10px" data-act="delVPage">${I('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>')} Продадох я — изтрий от телефона</button></div>
   ${noteHTML()}`;
 }
 function recHTML(r,ro){const t=RT[r.type]||RT.other;let title=r.title||t[0],sub=[fmtD(r.date)];
@@ -365,7 +365,9 @@ Bulgarian hints: маслен филтър = oil filter; въздушен фил
 const AIERR={ocr_unavailable:'Разпознаването на текст работи само в приложението на телефона.',ocr_empty:'Не се разчита текст. Снимайте по-отблизо, на светло и без отблясъци.',not_granted:'Достъпът до Claude не е разрешен.',sampling_disabled:'Claude не е достъпен за този профил.',images_unavailable:'Изпращането на снимки към Claude не е достъпно тук.',rate_limited:'Твърде много заявки — опитайте след малко.',image_rejected:'Снимката не може да се прочете. Опитайте с друга.',invalid_json:'Документът не се разчете. Опитайте пак или с по-ясна снимка.',cancelled:''};
 const sstr=x=>x==null?'':String(x).trim(),snum=x=>{const n=parseFloat(String(x??'').replace(',','.'));return isFinite(n)&&n>0?n:null};
 const KIND={fuel:['fuel'],oil:['oil'],service:['service'],tires:['tires'],vignette:['ins','vig'],route_card:['ins','mk'],gtp:['ins','gtp'],go:['ins','go'],kasko:['ins','kasko'],tax:['ins','tax'],other:['other']};
-async function askAI(imgs,hint){const t=[];for(const b of imgs.slice(0,3))t.push(await ocrText(b));const all=t.join('\n');if(!all.trim())throw {code:'ocr_empty'};return parseDoc(all,hint)}
+async function askAI(imgs,hint){const t=[];for(const b of imgs.slice(0,3))t.push(await ocrText(b));const all=t.join('\n');LASTOCR=all;if(!all.trim())throw {code:'ocr_empty'};return parseDoc(all,hint)}
+let LASTOCR='';
+const ocrDetails=()=>LASTOCR?`<details style="margin:-6px 0 14px"><summary style="cursor:pointer;color:var(--eu2);padding:6px 0;font-size:14px">Какво разчете телефонът</summary><pre style="white-space:pre-wrap;font-size:12px;background:var(--chip);padding:10px;border-radius:10px;max-height:220px;overflow:auto">${esc(LASTOCR)}</pre><button class="btn" style="min-height:40px" data-act="copyocr">Копирай текста</button></details>`:'';
 async function ocrText(b){if(window.__OCR)return window.__OCR(b);return ocr(b)}
 /* ---------- reading documents from recognized text (heuristics, offline) ---------- */
 const CYR={'А':'A','В':'B','Е':'E','К':'K','М':'M','Н':'H','О':'O','Р':'P','С':'C','Т':'T','У':'Y','Х':'X'};
@@ -379,6 +381,36 @@ const REG='(?:CA|CB|CH|CM|CO|CC|CT|BH|BP|BT|EB|EH|KH|OB|PA|PB|PK|PP|TX|A|B|C|E|H
 function findPlate(T){const m=T.match(new RegExp('(?<![A-Z0-9])'+REG+'\\s?\\d{4}\\s?[ABEKMHOPCTYX]{1,2}(?![A-Z0-9])'));return m?m[0].replace(/\s+/g,' ').replace(/^([A-Z]+)\s?(\d{4})\s?([A-Z]+)$/,'$1 $2 $3'):''}
 function findVin(T){const fix=v=>v.replace(/O/g,'0').replace(/[IQ]/g,c=>c==='I'?'1':'0');for(const m of T.matchAll(/(?<![A-Z0-9])[A-Z0-9]{17}(?![A-Z0-9])/g)){const v=fix(m[0]);if(/[A-Z]/.test(v)&&/\d{5,}/.test(v))return v}for(const m of T.replace(/[ \t]/g,'').matchAll(/[A-Z0-9]{17}/g)){const v=m[0].replace(/O/g,'0').replace(/[IQ]/g,c=>c==='I'?'1':'0');if(/[A-Z]/.test(v)&&/\d{5,}/.test(v))return v}return ''}
 const BRANDS=['VOLKSWAGEN','VW','AUDI','BMW','MERCEDES-BENZ','MERCEDES','OPEL','FORD','TOYOTA','RENAULT','PEUGEOT','CITROEN','SKODA','SEAT','CUPRA','FIAT','HYUNDAI','KIA','NISSAN','MAZDA','HONDA','DACIA','VOLVO','SUZUKI','MITSUBISHI','CHEVROLET','ALFA ROMEO','LANCIA','JEEP','LAND ROVER','JAGUAR','MINI','PORSCHE','SUBARU','LEXUS','TESLA','SMART','SSANGYONG','DS','MG','BYD','LADA'];
+const MODELS={VOLKSWAGEN:'GOLF PLUS|GOLF|PASSAT CC|PASSAT|POLO|TOURAN|TIGUAN|CADDY|TRANSPORTER|MULTIVAN|JETTA|SHARAN|T-ROC|T-CROSS|TOUAREG|ARTEON|BORA|UP|LUPO|FOX|SCIROCCO|BEETLE|AMAROK|ID\\.?3|ID\\.?4|CRAFTER',
+AUDI:'A1|A2|A3|A4 ALLROAD|A4|A5|A6 ALLROAD|A6|A7|A8|Q2|Q3|Q5|Q7|Q8|TT|E-TRON',BMW:'X1|X2|X3|X4|X5|X6|X7|[1-8]\\d{2}[DIEX]{0,2}|[1-8]ER|Z4|I3|IX',
+MERCEDES:'[ABCEGSV]\\s?\\d{3}\\s?(?:CDI|D|TD|K)?|ML\\s?\\d{3}|GLA|GLB|GLC|GLE|GLK|CLA|CLK|CLS|SLK|SPRINTER|VITO|VIANO|CITAN',
+OPEL:'ASTRA|CORSA|INSIGNIA|ZAFIRA|VECTRA|MERIVA|MOKKA|MOVANO|VIVARO|COMBO|AGILA|ANTARA|CROSSLAND|GRANDLAND|OMEGA|SIGNUM|TIGRA|FRONTERA',
+FORD:'FOCUS|FIESTA|MONDEO|KUGA|C-MAX|S-MAX|TRANSIT CONNECT|TRANSIT|GALAXY|PUMA|FUSION|ECOSPORT|KA|RANGER|B-MAX|EDGE|MUSTANG',
+TOYOTA:'COROLLA VERSO|COROLLA|YARIS CROSS|YARIS|AURIS|AVENSIS|RAV\\s?4|C-HR|PRIUS|LAND CRUISER|HILUX|AYGO|VERSO|CAMRY|PROACE',
+RENAULT:'CLIO|MEGANE|GRAND SCENIC|SCENIC|LAGUNA|KANGOO|CAPTUR|KADJAR|TRAFIC|MASTER|TWINGO|ARKANA|AUSTRAL|ESPACE|FLUENCE|KOLEOS|ZOE|MODUS|THALIA|SYMBOL',
+PEUGEOT:'PARTNER|EXPERT|BOXER|RIFTER|\\d{3,4}',CITROEN:'BERLINGO|XSARA PICASSO|XSARA|C-ELYSEE|C\\d(?: AIRCROSS| PICASSO)?|JUMPY|JUMPER|DS\\d|SAXO|NEMO',
+SKODA:'OCTAVIA|FABIA|SUPERB|RAPID|YETI|KODIAQ|KAROQ|KAMIQ|SCALA|ROOMSTER|CITIGO|ENYAQ|FELICIA',SEAT:'IBIZA|LEON|ALTEA|TOLEDO|ATECA|ARONA|CORDOBA|ALHAMBRA|TARRACO|MII',
+CUPRA:'FORMENTOR|BORN|LEON|ATECA',FIAT:'GRANDE PUNTO|PUNTO|PANDA|500X|500L|500|DOBLO|BRAVO|TIPO|STILO|DUCATO|SEICENTO|MULTIPLA|FIORINO|QUBO|SEDICI|CROMA|LINEA',
+HYUNDAI:'I10|I20|I30|I40|IX20|IX35|TUCSON|SANTA FE|KONA|ACCENT|GETZ|ELANTRA|MATRIX|BAYON|IONIQ',KIA:'CEED|PRO CEED|SPORTAGE|RIO|PICANTO|SORENTO|NIRO|STONIC|VENGA|CARENS|SOUL|XCEED|OPTIMA',
+NISSAN:'QASHQAI|JUKE|MICRA|NOTE|X-TRAIL|NAVARA|PRIMERA|ALMERA|LEAF|PATHFINDER|TIIDA|PULSAR',MAZDA:'CX-\\d{1,2}|MX-5|MAZDA\\s?\\d|[2356]',HONDA:'CIVIC|ACCORD|CR-V|JAZZ|HR-V|FR-V',
+DACIA:'LOGAN|SANDERO|DUSTER|JOGGER|SPRING|LODGY|DOKKER',VOLVO:'V40|V50|V60|V70|V90|XC40|XC60|XC70|XC90|S40|S60|S80|S90|C30',SUZUKI:'GRAND VITARA|VITARA|SWIFT|SX4|S-CROSS|JIMNY|IGNIS|SPLASH|LIANA|BALENO',
+MITSUBISHI:'LANCER|OUTLANDER|ASX|PAJERO|COLT|L200|SPACE STAR|ECLIPSE CROSS',CHEVROLET:'AVEO|CRUZE|SPARK|CAPTIVA|LACETTI|KALOS|MATIZ|ORLANDO|TRAX',TESLA:'MODEL\\s?[3SXY]',
+MINI:'COUNTRYMAN|CLUBMAN|COOPER|ONE',JEEP:'GRAND CHEROKEE|CHEROKEE|COMPASS|RENEGADE|WRANGLER',LANDROVER:'RANGE ROVER(?: SPORT| EVOQUE)?|DISCOVERY(?: SPORT)?|FREELANDER|DEFENDER',
+PORSCHE:'CAYENNE|MACAN|PANAMERA|911|BOXSTER|TAYCAN',SUBARU:'FORESTER|OUTBACK|IMPREZA|LEGACY|XV',LEXUS:'[A-Z]{2}\\s?\\d{3}H?',SMART:'FORTWO|FORFOUR',LADA:'NIVA|VESTA|GRANTA|KALINA|2107|2105|2121',
+ALFAROMEO:'GIULIETTA|GIULIA|STELVIO|MITO|159|147|156',DS:'DS\\s?\\d',MG:'ZS|HS|MG\\s?4|MG\\s?5',BYD:'ATTO\\s?3|DOLPHIN|SEAL|HAN|TANG'};
+function lev(a,b){const m=a.length,n=b.length;if(Math.abs(m-n)>2)return 9;const d=Array.from({length:m+1},(_,i)=>[i]);for(let j=1;j<=n;j++)d[0][j]=j;for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[m][n]}
+function findMake(T){for(const x of BRANDS){if(new RegExp('(?<![A-Z])'+x.replace(/[-\s]/g,'[-\\s]?')+'(?![A-Z])').test(T))return x}
+  const toks=T.replace(/0/g,'O').match(/[A-Z][A-Z-]{3,}/g)||[];for(const t of toks)for(const x of BRANDS){if(x.length>=5&&lev(t,x.replace(/[\s]/g,''))<=1)return x}return ''}
+const prettyMake=b=>({VW:'Volkswagen',BMW:'BMW','MERCEDES':'Mercedes-Benz','MERCEDES-BENZ':'Mercedes-Benz','ALFA ROMEO':'Alfa Romeo','LAND ROVER':'Land Rover',DS:'DS',MG:'MG',BYD:'BYD',KIA:'Kia',SEAT:'Seat',MINI:'Mini'})[b]||b.charAt(0)+b.slice(1).toLowerCase();
+function findModel(T,L,make){const key=(make==='VW'?'VOLKSWAGEN':make==='MERCEDES-BENZ'?'MERCEDES':make).replace(/\s/g,'');
+  const lab=T.match(/\bD\s?[.,]?\s?3\s?[.,:]?\s+([A-Z0-9][A-Z0-9 .\-\/]{0,24})/);
+  const pat=MODELS[key];
+  if(lab){const v=lab[1].trim().split(/\s{2,}/)[0];if(!pat||new RegExp('^(?:'+pat+')').test(v))return v.replace(/\s+/g,' ').slice(0,30)}
+  if(pat){const m=T.match(new RegExp('(?<![A-Z0-9])('+pat+')(?![A-Z0-9])'));if(m&&!(m[1]===make))return m[1].replace(/\s+/g,' ')}
+  if(make){const i=L.findIndex(l=>l.includes(make));if(i>=0){const after=L[i].split(make)[1]||'';const t=after.trim().match(/^[A-Z0-9][A-Z0-9\-]{1,15}/);if(t)return t[0];const nx=(L[i+1]||'').trim();if(/^[A-Z0-9][A-Z0-9 \-]{1,20}$/.test(nx)&&!/^\d+$/.test(nx)&&!datesIn(nx).length)return nx}}
+  return ''}
+function firstReg(T,ds){const m=T.match(/(?:^|\n|\s)B\s?[.,:]?\s*(\d{1,2}\s?[.\/-]\s?\d{1,2}\s?[.\/-]\s?\d{4})/);if(m){const d=datesIn(m[1]);if(d.length)return d[0]}
+  const ok=ds.filter(d=>d<=today()&&d>='1960-01-01');return ok[0]||''}
 const FILTBR=/\b(MANN|MAHLE|KNECHT|FILTRON|BOSCH|UFI|PURFLUX|HENGST|FRAM|CHAMPION|DENCKERMANN|BLUE ?PRINT|MEYLE|SCT|JAPANPARTS|VALEO|DELPHI|CLEAN ?FILTERS|K&N)\b/;
 const OILBR=/\b(CASTROL|MOBIL ?1?|SHELL ?HELIX|SHELL|TOTAL ?(?:QUARTZ)?|TOTALENERGIES|LIQUI ?MOLY|MOTUL|ELF|VALVOLINE|FUCHS|PETRONAS|RAVENOL|MANNOL|LUKOIL|ENEOS|KIXX|ADDINOL|REPSOL|GULF|PENNASOL|WOLF|MOTOREX)\b/;
 function partCode(lines,re){for(const l of lines){const m=l.match(re);if(m){const b=l.match(FILTBR);return ((b?b[1]+' ':'')+m[1]).replace(/\s+/g,' ').trim()}}return ''}
@@ -397,11 +429,12 @@ function parseDoc(text,hint){const T=normT(text),L=T.split('\n').map(x=>x.trim()
   const isVig=/BGTOLL|VIGNET|VINETK|BNHETK|BИНЕТ|E-?VIGN/.test(T);
   let kind=hint==='reg'?'registration':null;
   if(!kind&&['fuel','oil','service','tires','other','ins'].includes(hint))kind=hint==='ins'?(isVig?'vignette':'ins'):hint;
-  if(!kind){if(vin&&!isFuel&&!visc)kind='registration';else if(isVig)kind='vignette';else if(visc||oilF)kind='oil';else if(isFuel)kind='fuel';else if(ds.length>=2&&dayDiff(ds[0],ds[ds.length-1])>=20&&dayDiff(ds[0],ds[ds.length-1])<=400)kind='ins';else kind='other'}
+  const isReg=vin&&(pl||/\bD\s?[.,]?\s?[13]\b|\bE\s?[.,]\s|CBNДETEЛ|CBИДETEЛ|SVIDETEL|REGISTR|PE[ГG]NCTP/.test(T)||!isFuel);
+  if(!kind){if(isReg&&!visc)kind='registration';else if(isVig)kind='vignette';else if(visc||oilF)kind='oil';else if(isFuel)kind='fuel';else if(ds.length>=2&&dayDiff(ds[0],ds[ds.length-1])>=20&&dayDiff(ds[0],ds[ds.length-1])<=400)kind='ins';else kind='other'}
   o.kind=kind==='ins'?null:kind;
   if(past.length&&kind!=='registration')o.date=past[past.length-1];
-  if(kind==='registration'){if(vin)o.vin=vin;const b=BRANDS.find(x=>new RegExp('\\b'+x.replace(/[-\s]/g,'[-\\s]?')+'\\b').test(T));if(b)o.make=b==='VW'?'Volkswagen':b.charAt(0)+b.slice(1).toLowerCase();
-    if(ds.length)o.year=+ds[0].slice(0,4);if(/DIESEL|ДИЗЕЛ/.test(T))o.fuelType='Дизел';else if(/PETROL|BENZIN|БЕНЗИН/.test(T))o.fuelType='Бензин';o.category='M1';return o}
+  if(kind==='registration'){if(vin)o.vin=vin;const mk=findMake(T);if(mk){o.make=prettyMake(mk);const md=findModel(T,L,mk);if(md)o.model=md.split(' ').map(w=>/\d/.test(w)||w.length<=3?w:w.split('-').map(x=>x.charAt(0)+x.slice(1).toLowerCase()).join('-')).join(' ')}
+    const fr=firstReg(T,ds);if(fr)o.year=+fr.slice(0,4);if(/DIESEL|DIZEL|ДИЗ[EЕ]Л|AN3EN/.test(T))o.fuelType='Дизел';else if(/PETROL|BENZIN|Б[EЕ]НЗИН|BEH3NH|GASOLINE/.test(T))o.fuelType='Бензин';else if(/LPG|ПРОПАН|NPONAH/.test(T))o.fuelType='Газ (LPG)';o.category='M1';return o}
   if(kind==='fuel'){const qp=T.match(/(\d{1,3}[.,]\d{2,3})\s*(?:L|LT|LTR|Л)?\s*[X×*]\s*(\d[.,]\d{2,4})/);
     if(qp){const l=parseFloat(qp[1].replace(',','.')),pr=parseFloat(qp[2].replace(',','.'));if(l>=1&&l<=200&&pr>=.5&&pr<=5){o.liters=l;o.price=pr}}
     if(!o.liters){const lm=T.match(/(\d{1,3}[.,]\d{1,3})\s*(?:L|LT|LTR|Л|ЛТ|LITR)\b/);if(lm){const l=parseFloat(lm[1].replace(',','.'));if(l>=1&&l<=200)o.liters=l}}
@@ -484,7 +517,7 @@ function regPrefill(o){const vin=normVin(o.vin),pl=sstr(o.plate).toUpperCase();
   set('plate',pl);set('vin',vinOk(vin)?vin:'');set('make',sstr(o.make).slice(0,40));set('model',sstr(o.model).slice(0,40));
   const y=Math.round(snum(o.year)||0);if(y>1900&&y<2100)set('year',String(y));set('fuel',mapFuel(o.fuelType));
   const c=sstr(o.category).toUpperCase();const mm=snum(o.maxMass);
-  vehForm(v);const h=$('#panel h3');if(h)h.insertAdjacentHTML('afterend',`<div class="allok" style="margin-bottom:14px">${I('<path d="M5 12l4 4 10-10"/>')}<span>Данните от талона са попълнени. Проверете ги и добавете сроковете.</span></div>`)}
+  vehForm(v);const h=$('#panel h3');if(h)h.insertAdjacentHTML('afterend',`<div class="allok" style="margin-bottom:14px">${I('<path d="M5 12l4 4 10-10"/>')}<span>Данните от талона са попълнени. Проверете ги и добавете сроковете.</span></div>`+ocrDetails())}
 
 /* ---------- short summary for a sale ---------- */
 function summaryHTML(recs){recs=recs.filter(r=>r&&r.type!=='fuel').slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));if(!recs.length)return '';
@@ -658,7 +691,7 @@ async function rcptFlow(file){const r=form.r;phBusy('Чета касовата �
   if(form&&form.kind==='rec')drawRec()}
 async function odoFlow(file){const r=form.r;phBusy('Чета километража…');
   try{const p=await storePhoto(file);p.odo=true;r.photos.push(p)}catch(e){}
-  try{const o=parseOdo(await ocrText(file));let k=snum(o&&o.km);
+  try{const tx=await ocrText(file);LASTOCR=tx;const o=parseOdo(tx);let k=snum(o&&o.km);
     if(!k){form.aiMsg='Не се вижда ясно общият пробег. Снимайте по-отблизо, без отблясъци, или го въведете ръчно.'}
     else{if(o.unit==='mi')k=Math.round(k*1.609344);r.km=Math.round(k);const v=S.vehicles.find(x=>x.id===r.vid),prev=v?curKm(v):0;
       form.aiMsg='Километраж: '+km(r.km)+(o.unit==='mi'?' (превърнато от мили)':'')+'.'+(prev&&r.km<prev?' Внимание: по-малко от последния запис ('+km(prev)+') — проверете.':'')+(r.type==='fuel'&&!r.liters?' Сега снимайте касовата бележка (бутон 1).':' Проверете и запазете.')}}
@@ -686,7 +719,7 @@ function vehForm(v){v=v||{id:gid(),type:'car',dl:{},oilKm:10000,oilMonths:12};fo
   <div class="two">${fld('oilKm','На всеки (км)',v.oilKm,'number','inputmode="numeric"')}${fld('oilMonths','Или на всеки (месеца)',v.oilMonths,'number','inputmode="numeric"')}</div>
   <label class="f"><span>Бележки</span><textarea name="notes">${esc(v.notes)}</textarea></label>
   <div class="actions"><button class="btn" data-close>Отказ</button><button class="btn pri" data-act="saveV">Запази</button></div>
-  ${S.vehicles.some(x=>x.id===v.id)?'<div class="actions"><button class="btn del" data-act="delV">Изтрий превозното средство</button></div>':''}`)}
+  ${S.vehicles.some(x=>x.id===v.id)?'<div class="actions"><button class="btn del" data-act="delV">Изтрий автомобила</button></div>':''}`)}
 function recForm(r,vid){
   const isNew=!r;r=r?JSON.parse(JSON.stringify(r)):{id:gid(),vid,type:'fuel',date:today(),photos:[]};
   form={kind:'rec',r,isNew};drawRec();
@@ -707,7 +740,7 @@ function drawRec(){const r=form.r,t=r.type,v=S.vehicles.find(x=>x.id===r.vid);
    ${(t==='service'||t==='oil')&&v?`<div class="f"><span>${t==='oil'?'Сменено още':'Обслужено (за напомняния)'}</span><div class="parts">${mlist(v).map(m=>`<label><input type="checkbox" name="items" value="${esc(m.k)}" ${(r.items||[]).includes(m.k)?'checked':''}><span>${esc(m.l)}</span></label>`).join('')}</div></div>`:''}
    ${fld('title',t==='oil'?'Масло (марка, вискозитет)':t==='tires'?'Какво (напр. смяна на зимни)':'Какво е направено',r.title,'text',t==='oil'?'placeholder="Castrol 5W-30, 4.5 л"':t==='service'?'placeholder="Смяна на накладки отпред"':'')}
    ${fld('shop','Сервиз / магазин',r.shop)}`;
-  openSheet(`<h3>${form.isNew?'Нов запис':'Запис'}</h3>${form.aiMsg?`<div class="allok" style="margin-bottom:14px">${I('<path d="M5 12l4 4 10-10"/>')}<span>${esc(form.aiMsg)}</span></div>`:''}${vsel}
+  openSheet(`<h3>${form.isNew?'Нов запис':'Запис'}</h3>${form.aiMsg?`<div class="allok" style="margin-bottom:14px">${I('<path d="M5 12l4 4 10-10"/>')}<span>${esc(form.aiMsg)}</span></div>`+ocrDetails():''}${vsel}
   <div class="seg sm">${Object.entries(RT).map(([k,a])=>`<label><input type="radio" name="rtype" value="${k}" ${t===k?'checked':''}><span>${I(a[2])}${a[0]}</span></label>`).join('')}</div>
   ${body}<details ${r.notes?'open':''} style="margin-bottom:14px"><summary style="cursor:pointer;color:var(--eu2);padding:8px 0;font-weight:600">Бележка</summary><label class="f" style="margin-top:6px"><textarea name="notes" aria-label="Бележка" placeholder="Гаранция, следваща проверка…">${esc(r.notes)}</textarea></label></details>
   <div class="f"><span>Фактура, касова бележка, снимки</span><div class="photos" id="phs">${phEdit()}</div>
@@ -784,6 +817,7 @@ document.addEventListener('click',async e=>{
   if(b.id==='setBtn')return settings();
   switch(d.act){
     case 'home':go(null);break;
+    case 'delVPage':if(pendingDel!==b){pendingDel=b;b.textContent='Сигурни ли сте? Докоснете пак — изтрива колата, записите и снимките';return}{const id=S.vid;go(null);await delV(id);toast('Колата е изтрита от телефона.')}break;
     case 'flush':await flushPQ();toast(PQ.length?'Още не мина — вижте съобщението.':'Всичко е записано.');break;
     case 'toAlerts':{const h=$('#alertsH');h&&h.scrollIntoView({behavior:'smooth'})}break;
     case 'addV':vehForm();break;
@@ -792,9 +826,10 @@ document.addEventListener('click',async e=>{
     case 'saveR':await saveRec();break;
     case 'cam':keepRec();$('#fCam').click();break;
     case 'file':keepRec();$('#fFile').click();break;
-    case 'delV':if(pendingDel!==b){pendingDel=b;b.textContent='Докоснете пак — изтрива и всички записи';return}{const id=form.v.id;closeSheet();go(null);await delV(id);toast('Изтрито.')}break;
+    case 'delV':if(pendingDel!==b){pendingDel=b;b.textContent='Докоснете пак — изтрива колата и всички записи';return}{const id=form.v.id;closeSheet();go(null);await delV(id);toast('Изтрито.')}break;
     case 'delR':if(pendingDel!==b){pendingDel=b;b.textContent='Докоснете пак, за да изтриете';return}{const r=form.r;closeSheet();(r.photos||[]).forEach(dropPhoto);await delR(r.id);toast('Изтрито.')}break;
     case 'ai':await aiExtract(b);break;
+    case 'copyocr':try{await navigator.clipboard.writeText(LASTOCR);toast('Текстът е копиран — можете да го пратите.')}catch(err){toast('Маркирайте текста и го копирайте ръчно.')}break;
     case 'notifOn':{const st=await notifPermission(true);toast(st==='granted'?'Известията са разрешени.':'Разрешете известията от Настройки → Приложения → АвтоТефтер → Известия.');settings()}break;
     case 'notifTest':if(N){const st=await notifPermission(true);if(st==='granted'){await N.LocalNotifications.schedule({notifications:[{id:999999,title:'АвтоТефтер',body:'Така ще изглеждат напомнянията за сроковете.',schedule:{at:new Date(Date.now()+5000),allowWhileIdle:true},smallIcon:'ic_stat_car',iconColor:'#0A3A9E'}]});toast('Известието идва след 5 секунди.')}else toast('Първо разрешете известията.')}else toast('Работи само в приложението на телефона.');break;
     case 'bk':await exportBackup(false);break;
