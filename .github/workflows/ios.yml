@@ -1,0 +1,44 @@
+name: Build iOS (unsigned IPA)
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run bundle && npx cap sync ios
+      - name: Install pods
+        working-directory: ios/App
+        run: pod install --repo-update
+      - name: Build (no code signing)
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath $RUNNER_TEMP/App.xcarchive archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -40
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -R $RUNNER_TEMP/App.xcarchive/Products/Applications/App.app Payload/
+          zip -qry AvtoTefter-unsigned.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AvtoTefter-ipa
+          path: AvtoTefter-unsigned.ipa
+      - name: Publish download link (release "ios-latest")
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-latest
+          name: АвтоТефтер – iPhone (неподписан)
+          body: Неподписан IPA. Инсталира се със Sideloadly/AltStore и безплатен Apple ID (валиден 7 дни) или се подписва с платен Apple Developer акаунт.
+          files: AvtoTefter-unsigned.ipa
+          make_latest: false
